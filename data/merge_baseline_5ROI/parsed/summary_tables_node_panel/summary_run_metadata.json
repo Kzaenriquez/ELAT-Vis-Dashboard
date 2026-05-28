@@ -1,0 +1,23 @@
+{
+  "parsed_dir": "/mnt/d/Thesis Masters/thesis-runs/ELA_run_5ROI/_merged_fit_runs_ela_5ROI/merge_baseline_ela_5ROI/parsed",
+  "out_dir": "/mnt/d/Thesis Masters/thesis-runs/ELA_run_5ROI/_merged_fit_runs_ela_5ROI/merge_baseline_ela_5ROI/parsed/summary_tables_node_panel",
+  "event_col": "trial_type_hrf4",
+  "epoch_col": "trialblock_epoch_hrf4",
+  "epoch_mode": "full",
+  "group_filter": null,
+  "subject_filter": null,
+  "task_filter": null,
+  "session_filter": null,
+  "n_timeline_rows": 10868,
+  "n_states_summary_rows": 96,
+  "n_transition_rows": 2700,
+  "n_transition_backbone_rows": 184,
+  "transition_backbone_filters": {
+    "min_transition_count": 5,
+    "min_transition_prob": 0.07,
+    "min_subject_support_count": 4,
+    "min_subject_support_prop": 0.0,
+    "top_k_per_state": 2,
+    "hide_self_transitions": true
+  }
+}
