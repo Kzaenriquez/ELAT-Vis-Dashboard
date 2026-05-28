@@ -450,10 +450,7 @@ st.caption("Portable visual analytics dashboard for Ezaki ELAT outputs, task/eve
 
 st.sidebar.header("Input")
 
-default_parsed = (
-    "/mnt/d/Thesis Masters/thesis-runs/ELA_run_5ROI/"
-    "_merged_fit_runs_ela_5ROI/merge_extinction_ela_5ROI/parsed"
-)
+default_parsed = ("data/merge_extinction_5ROI/parsed")
 
 parsed_dir_str = st.sidebar.text_input(
     "Parsed ELAT directory",
