@@ -4,15 +4,23 @@ app_streamlit_v1_5_elatvis.py
 
 Streamlit MVP dashboard for ELAT-Vis.
 
-Expected module directory:
-    /mnt/d/Thesis Masters/thesis-runs/data_viz/final
+GitHub/Streamlit Cloud layout supported:
+    repo/
+      ELAT-Vis-Dashboard/
+        app_streamlit_v1_5_elatvis.py
+        figures_*.py
+        summary_tables_v1_elatvis.py
+      data/
+        <run>/
+          parsed/
+            timeline_table.csv
+            states_table.csv
+            ...
+          figures/                  # optional
+            Figure_100.png
 
-Run:
-    cd "/mnt/d/Thesis Masters/thesis-runs/data_viz/final"
-    streamlit run app_streamlit_v1_5_elatvis.py
-
-Expected parsed directory example:
-    /mnt/d/Thesis Masters/thesis-runs/ELA_run_5ROI/_merged_fit_runs_ela_5ROI/merge_extinction_ela_5ROI/parsed
+Run locally:
+    python -m streamlit run app_streamlit_v1_5_elatvis.py
 """
 
 from __future__ import annotations
@@ -33,10 +41,107 @@ import streamlit.components.v1 as components
 
 DEFAULT_MODULE_DIR = Path("/mnt/d/Thesis Masters/thesis-runs/data_viz/final")
 THIS_DIR = Path(__file__).resolve().parent
+APP_ROOT = THIS_DIR
+
+# Handles both layouts:
+#   repo/app_streamlit_v1_5_elatvis.py + repo/data/
+#   repo/ELAT-Vis-Dashboard/app_streamlit_v1_5_elatvis.py + repo/data/
+REPO_ROOT = THIS_DIR.parent if (THIS_DIR.parent / "data").exists() else THIS_DIR
+
+DATA_ROOT_CANDIDATES = [
+    THIS_DIR / "data",
+    THIS_DIR.parent / "data",
+    Path.cwd() / "data",
+]
+
+DATA_ROOTS = []
+for _root in DATA_ROOT_CANDIDATES:
+    try:
+        _resolved = _root.resolve()
+    except Exception:
+        _resolved = _root
+    if _root.exists() and _resolved not in DATA_ROOTS:
+        DATA_ROOTS.append(_resolved)
 
 for p in [THIS_DIR, DEFAULT_MODULE_DIR]:
     if p.exists() and str(p) not in sys.path:
         sys.path.insert(0, str(p))
+
+
+def resolve_dashboard_path(path_str: str) -> Path:
+    """
+    Resolve paths robustly for local use, GitHub repo layout, and Streamlit Cloud.
+
+    Accepts:
+      data/merge_extinction_ela_5ROI/parsed
+      /data/merge_extinction_ela_5ROI/parsed
+      ELAT-Vis-Dashboard/...
+      absolute local paths
+    """
+    raw = str(path_str).strip().strip('"').strip("'")
+    p = Path(raw)
+
+    # Already valid absolute or relative to current working directory.
+    if p.exists():
+        return p.resolve()
+
+    # Fix accidental leading slash in Streamlit sidebar: /data/... -> data/...
+    if raw.startswith("/data/"):
+        raw_no_slash = raw.lstrip("/")
+        for base in [THIS_DIR, THIS_DIR.parent, Path.cwd()]:
+            q = base / raw_no_slash
+            if q.exists():
+                return q.resolve()
+
+    # Try relative to app folder, repo parent, and current working directory.
+    for base in [THIS_DIR, THIS_DIR.parent, Path.cwd()]:
+        q = base / raw
+        if q.exists():
+            return q.resolve()
+
+    return p
+
+
+def discover_parsed_dirs() -> list[Path]:
+    """
+    Find parsed directories under all known data/ folders.
+    A valid parsed directory must contain timeline_table.csv.
+    """
+    candidates = []
+    seen = set()
+
+    for data_root in DATA_ROOTS:
+        for p in data_root.rglob("parsed"):
+            if (p / "timeline_table.csv").exists():
+                rp = p.resolve()
+                if rp not in seen:
+                    candidates.append(rp)
+                    seen.add(rp)
+
+    return sorted(candidates, key=lambda x: str(x).lower())
+
+
+def pretty_parsed_label(p: Path) -> str:
+    """
+    Readable dropdown label.
+
+    Example:
+      /repo/data/merge_extinction_ela_5ROI/parsed
+      -> data/merge_extinction_ela_5ROI
+    """
+    p = Path(p)
+    for base in [THIS_DIR, THIS_DIR.parent, Path.cwd()]:
+        try:
+            rel = p.relative_to(base)
+            if rel.name == "parsed":
+                return str(rel.parent)
+            return str(rel)
+        except Exception:
+            pass
+
+    if p.name == "parsed":
+        return p.parent.name
+    return str(p)
 
 
 # Import generated ELAT-Vis modules.
@@ -102,7 +207,7 @@ def read_csv_if_exists(path: Path) -> Optional[pd.DataFrame]:
 
 @st.cache_data(show_spinner=False)
 def load_parsed_basic(parsed_dir_str: str) -> Dict[str, object]:
-    parsed_dir = Path(parsed_dir_str)
+    parsed_dir = resolve_dashboard_path(parsed_dir_str)
     out: Dict[str, object] = {
         "parsed_dir": parsed_dir,
         "exists": parsed_dir.exists(),
@@ -202,40 +307,87 @@ def display_table_file(path: Path, max_rows: int = 200):
     st.dataframe(df.head(max_rows), use_container_width=True, height=420)
 
 
-def find_elat_output_dir(parsed_dir: Path) -> Path:
-    """Infer the ELAT output directory from a parsed directory."""
+def find_elat_figure_search_dirs(parsed_dir: Path) -> List[Path]:
+    """
+    Candidate folders for ELAT figure exports.
+
+    Works when only parsed/ was uploaded by searching:
+      parsed/
+      parsed/figures/
+      parent/
+      parent/figures/
+
+    Recommended repo layout for figure previews:
+      data/<run>/parsed/figures/Figure_100.png
+    or:
+      data/<run>/figures/Figure_100.png
+    """
+    parsed_dir = resolve_dashboard_path(str(parsed_dir))
+    candidates = []
+
     if parsed_dir.name.lower() == "parsed":
-        return parsed_dir.parent
-    return parsed_dir
+        candidates.extend([
+            parsed_dir / "figures",
+            parsed_dir,
+            parsed_dir.parent / "figures",
+            parsed_dir.parent,
+        ])
+    else:
+        candidates.extend([
+            parsed_dir / "figures",
+            parsed_dir,
+        ])
+
+    out = []
+    seen = set()
+    for p in candidates:
+        try:
+            rp = p.resolve()
+        except Exception:
+            rp = p
+        if p.exists() and rp not in seen:
+            out.append(rp)
+            seen.add(rp)
+    return out
 
 
-def list_elat_figure_files(elat_dir: Path) -> List[Path]:
+def list_elat_figure_files(search_dirs: List[Path]) -> List[Path]:
     """
-    Find ELAT figure outputs.
+    Find displayable ELAT figure outputs in one or more search folders.
 
-    ELAT commonly writes Figure_100 ... Figure_103, but extensions vary
-    depending on export settings. This function prioritizes Figure_* files
-    and falls back to common image/html figure files.
+    Prioritizes Figure_100–Figure_103, then falls back to common image/html files.
     """
-    if not elat_dir.exists():
-        return []
-
     allowed = {".png", ".jpg", ".jpeg", ".svg", ".webp", ".html", ".htm", ".pdf"}
     candidates = []
-    for pat in ["Figure_100*", "Figure_101*", "Figure_102*", "Figure_103*", "figure_100*", "figure_101*", "figure_102*", "figure_103*"]:
-        candidates.extend([p for p in elat_dir.glob(pat) if p.suffix.lower() in allowed])
+
+    for fig_dir in search_dirs:
+        if not fig_dir.exists():
+            continue
+
+        for pat in [
+            "Figure_100*", "Figure_101*", "Figure_102*", "Figure_103*",
+            "figure_100*", "figure_101*", "figure_102*", "figure_103*",
+        ]:
+            candidates.extend([p for p in fig_dir.glob(pat) if p.suffix.lower() in allowed])
 
     if not candidates:
-        for pat in ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.html", "*.htm", "*.pdf"]:
-            candidates.extend(elat_dir.glob(pat))
+        for fig_dir in search_dirs:
+            if not fig_dir.exists():
+                continue
+            for pat in ["*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.html", "*.htm", "*.pdf"]:
+                candidates.extend([p for p in fig_dir.glob(pat) if p.suffix.lower() in allowed])
 
-    # De-duplicate while preserving sorted order.
     seen = set()
     out = []
-    for p in sorted(candidates, key=lambda x: x.name.lower()):
-        if p.resolve() not in seen:
-            out.append(p)
-            seen.add(p.resolve())
+    for p in sorted(candidates, key=lambda x: (str(x.parent).lower(), x.name.lower())):
+        try:
+            rp = p.resolve()
+        except Exception:
+            rp = p
+        if rp not in seen:
+            out.append(rp)
+            seen.add(rp)
+
     return out
 
 
@@ -450,19 +602,44 @@ st.caption("Portable visual analytics dashboard for Ezaki ELAT outputs, task/eve
 
 st.sidebar.header("Input")
 
-default_parsed = ("data/merge_extinction_5ROI/parsed")
+available_parsed_dirs = discover_parsed_dirs()
 
-parsed_dir_str = st.sidebar.text_input(
-    "Parsed ELAT directory",
-    value=default_parsed,
-    help="Use the parsed/ folder produced by parser.py.",
-)
+if available_parsed_dirs:
+    parsed_options = {pretty_parsed_label(p): p for p in available_parsed_dirs}
 
+    selected_label = st.sidebar.selectbox(
+        "Available parsed dataset",
+        list(parsed_options.keys()),
+        index=0,
+        help="Automatically detected parsed folders under data/.",
+    )
+
+    parsed_dir = parsed_options[selected_label]
+
+    with st.sidebar.expander("Manual path override", expanded=False):
+        manual_path = st.text_input(
+            "Manual parsed directory",
+            value=pretty_parsed_label(parsed_dir),
+            help="Use this only if the dataset is not detected automatically.",
+        )
+        use_manual = st.checkbox("Use manual path", value=False)
+        if use_manual:
+            parsed_dir = resolve_dashboard_path(manual_path)
+else:
+    st.sidebar.warning("No parsed datasets detected under data/. Use manual path.")
+    manual_path = st.sidebar.text_input(
+        "Parsed ELAT directory",
+        value="data/merge_extinction_ela_5ROI/parsed",
+        help="Use a relative path such as data/merge_extinction_ela_5ROI/parsed. Do not start with /data.",
+    )
+    parsed_dir = resolve_dashboard_path(manual_path)
+
+parsed_dir_str = str(parsed_dir)
 basic = load_parsed_basic(parsed_dir_str)
-parsed_dir = Path(parsed_dir_str)
 
 if not basic["exists"]:
-    st.error("Parsed directory does not exist. Check the path in the sidebar.")
+    st.error("Parsed directory does not exist. Check the selected dataset or manual path.")
+    st.code(str(parsed_dir))
     st.stop()
 
 timeline_df: Optional[pd.DataFrame] = basic["timeline"]  # type: ignore
@@ -582,27 +759,64 @@ with tabs[0]:
 
 with tabs[1]:
     st.subheader("Original ELAT figures")
-    st.caption("Displays Figure_100–Figure_103 outputs from the ELAT run directory when image/HTML exports are available.")
-
-    elat_dir_default = find_elat_output_dir(parsed_dir)
-    elat_dir_str = st.text_input(
-        "ELAT output directory",
-        value=str(elat_dir_default),
-        help="Usually the parent folder of parsed/. This should contain BasinList.txt, result.txt, Figure_100–Figure_103, etc.",
+    st.caption(
+        "Displays Figure_100–Figure_103 exports when available. "
+        "This build searches inside the selected parsed folder first, so it works even when only parsed/ was uploaded."
     )
-    elat_dir = Path(elat_dir_str)
 
-    fig_files = list_elat_figure_files(elat_dir)
+    figure_search_dirs = find_elat_figure_search_dirs(parsed_dir)
+
+    with st.expander("Figure search locations", expanded=False):
+        for d in figure_search_dirs:
+            st.code(str(d))
+
+        manual_fig_dir = st.text_input(
+            "Optional manual figure directory",
+            value="",
+            help="Example: data/merge_extinction_ela_5ROI/parsed/figures",
+        )
+        if manual_fig_dir.strip():
+            resolved_manual_fig_dir = resolve_dashboard_path(manual_fig_dir)
+            if resolved_manual_fig_dir.exists():
+                figure_search_dirs = [resolved_manual_fig_dir] + figure_search_dirs
+            else:
+                st.warning(f"Manual figure directory not found: {resolved_manual_fig_dir}")
+
+    fig_files = list_elat_figure_files(figure_search_dirs)
+
     if not fig_files:
-        st.warning("No displayable ELAT figure files found. Supported: PNG/JPG/SVG/WEBP/HTML/PDF.")
-        st.write("Checked:")
-        st.code(str(elat_dir))
-        st.info("If ELAT only exported MATLAB .fig files, export them first as .png or .html for dashboard preview.")
+        st.warning("No displayable ELAT figure files found.")
+        st.markdown(
+            """
+            This is expected if the GitHub repository only contains parsed CSV tables.
+
+            To make this tab display ELAT figures, upload PNG/HTML exports into either:
+
+            ```text
+            data/<run>/parsed/figures/Figure_100.png
+            data/<run>/parsed/figures/Figure_101.png
+            data/<run>/parsed/figures/Figure_102.png
+            data/<run>/parsed/figures/Figure_103.png
+            ```
+
+            or:
+
+            ```text
+            data/<run>/figures/Figure_100.png
+            ```
+
+            MATLAB `.fig` files will not preview directly in Streamlit; export them to PNG first.
+            """
+        )
     else:
         st.success(f"Found {len(fig_files)} displayable figure file(s).")
         view_mode = st.radio("View mode", ["One figure", "Gallery"], horizontal=True)
         if view_mode == "One figure":
-            selected = st.selectbox("Figure", fig_files, format_func=lambda p: p.name)
+            selected = st.selectbox(
+                "Figure",
+                fig_files,
+                format_func=lambda p: f"{p.parent.name}/{p.name}",
+            )
             render_figure_file(selected, height=760)
         else:
             cols = st.columns(2)
