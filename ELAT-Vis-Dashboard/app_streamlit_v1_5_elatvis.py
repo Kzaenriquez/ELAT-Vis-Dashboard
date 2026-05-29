@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-app_streamlit_v1_5_elatvis.py
+app_streamlit_v1_6_elatvis.py
 
 Streamlit MVP dashboard for ELAT-Vis.
 
 GitHub/Streamlit Cloud layout supported:
     repo/
       ELAT-Vis-Dashboard/
-        app_streamlit_v1_5_elatvis.py
+        app_streamlit_v1_6_elatvis.py
         figures_*.py
         summary_tables_v1_elatvis.py
       data/
@@ -20,7 +20,7 @@ GitHub/Streamlit Cloud layout supported:
             Figure_100.png
 
 Run locally:
-    python -m streamlit run app_streamlit_v1_5_elatvis.py
+    python -m streamlit run app_streamlit_v1_6_elatvis.py
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ THIS_DIR = Path(__file__).resolve().parent
 APP_ROOT = THIS_DIR
 
 # Handles both layouts:
-#   repo/app_streamlit_v1_5_elatvis.py + repo/data/
-#   repo/ELAT-Vis-Dashboard/app_streamlit_v1_5_elatvis.py + repo/data/
+#   repo/app_streamlit_v1_6_elatvis.py + repo/data/
+#   repo/ELAT-Vis-Dashboard/app_streamlit_v1_6_elatvis.py + repo/data/
 REPO_ROOT = THIS_DIR.parent if (THIS_DIR.parent / "data").exists() else THIS_DIR
 
 DATA_ROOT_CANDIDATES = [
@@ -680,6 +680,7 @@ global_session = sidebar_select_optional("Session", sessions, key="global_sessio
 
 tabs = st.tabs([
     "Overview",
+    "Visualization Outline",
     "ELAT Figures",
     "Timeline",
     "Event-Enriched Node Map",
@@ -753,11 +754,227 @@ with tabs[0]:
     st.dataframe(pd.DataFrame(file_rows), use_container_width=True)
 
 
+
+# ---------------------------------------------------------------------
+# Visualization Outline tab
+# ---------------------------------------------------------------------
+
+with tabs[1]:
+    st.subheader("Visualization outline")
+    st.caption(
+        "A guided interpretation page for domain experts reviewing ELAT-Vis. "
+        "Use this first before opening the analytic visualization tabs."
+    )
+
+    st.markdown(
+        """
+        ## 1. Task and event definitions
+
+        This dashboard visualizes Energy Landscape Analysis outputs from a contextual fear-learning task.
+        The core event labels are:
+
+        - **CS+**: the conditioned stimulus category that is treated as threat-associated because it was paired with the unconditioned stimulus/shock during acquisition.
+        - **CS−**: the comparison/safety stimulus category that was not paired with shock.
+        - **ITI**: inter-trial interval or non-CS period.
+
+        The event columns such as `trial_type`, `trial_type_hrf2`, `trial_type_hrf4`, and `trial_type_hrf6`
+        represent different temporal alignments between the task event and the fMRI signal.
+        `trial_type_hrf4` is often used as the default exploratory alignment because the BOLD response is delayed relative to stimulus onset.
+        """
+    )
+
+    task_table = pd.DataFrame(
+        [
+            {
+                "Task": "Baseline",
+                "What it represents": "Pre-learning or non-reinforced reference condition.",
+                "What to inspect": "Baseline basin occupancy, dwell time, and global-off/global-on locking.",
+            },
+            {
+                "Task": "Acquisition",
+                "What it represents": "CS+ becomes associated with shock/threat; CS− remains non-reinforced.",
+                "What to inspect": "CS+ recruitment of threat-like or global arousal basins; CS+ staying vs movement.",
+            },
+            {
+                "Task": "Extinction",
+                "What it represents": "CS+ is presented without shock, so threat expectation should weaken over time.",
+                "What to inspect": "Early vs late changes in CS+ routing; safety-like recruitment; persistence of threat-like states.",
+            },
+            {
+                "Task": "Renewal",
+                "What it represents": "Context shift after extinction; threat/safety associations may re-emerge or reorganize.",
+                "What to inspect": "CS− safety retrieval, CS+ global/threat-like recruitment, and group differences.",
+            },
+        ]
+    )
+    st.dataframe(task_table, use_container_width=True, hide_index=True)
+
+    st.markdown("## 2. Expected CS+ and CS− patterns")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(
+            """
+            ### Expected CS+ pattern
+
+            During acquisition, **CS+** is expected to show greater recruitment of
+            threat/salience-related basin patterns, especially states involving amygdala,
+            insula, dACC, or high-engagement configurations.
+
+            During extinction, CS+ should ideally become less threat-like over time,
+            but residual threat-like routing may remain, especially in late extinction
+            or in PTSD-related patterns.
+            """
+        )
+    with c2:
+        st.markdown(
+            """
+            ### Expected CS− pattern
+
+            **CS−** is expected to behave more like a safety or comparison condition.
+            It may show stronger recruitment of safety-like, context-regulatory, or
+            non-threat basin patterns.
+
+            If CS− fails to recruit safety-like basins, this may suggest weaker
+            safety-specific organization rather than only stronger CS+ threat persistence.
+            """
+        )
+
+    st.info(
+        "Interpretation rule: CS+ and CS− effects should be read as task-linked basin/state associations, "
+        "not as direct neural activation claims unless supported by the ROI pattern and statistical summaries."
+    )
+
+    st.markdown("## 3. Visualization tools in ELAT-Vis")
+
+    viz_table = pd.DataFrame(
+        [
+            {
+                "Tool": "ELAT Figures",
+                "What it shows": "Original ELAT outputs such as basin graph, landscape, disconnectivity graph, and state matrix if figure exports are available.",
+                "Best use": "Check the original landscape structure before task/event overlays.",
+            },
+            {
+                "Tool": "Timeline",
+                "What it shows": "Epoch strip, event-aligned basin table timeline, and ROI activation heatmap.",
+                "Best use": "Inspect when each basin/state occurs across TRs for one subject or filtered run.",
+            },
+            {
+                "Tool": "Event-Enriched Node Map",
+                "What it shows": "State-space graph with node size as occupancy, border as basin, fill as CS delta/enrichment, and edges as transition backbone.",
+                "Best use": "Identify event-associated states, local minima, and robust transitions.",
+            },
+            {
+                "Tool": "Pre-CS Sankey",
+                "What it shows": "Directional Pre-CS → During-CS → Post-CS event-window flows plus percentage and CS+−CS− difference charts.",
+                "Best use": "Summarize how basins change around CS events.",
+            },
+            {
+                "Tool": "Radial Basin Explorer",
+                "What it shows": "Per-subject animated movement through basin/state space with recent ROI activation history.",
+                "Best use": "Storytelling view for explaining one subject's trajectory.",
+            },
+            {
+                "Tool": "Summary Tables",
+                "What it shows": "State summaries, local minima, transitions, group deltas, and detected confirmatory/statistical files.",
+                "Best use": "Verify numerical values behind visual impressions.",
+            },
+        ]
+    )
+    st.dataframe(viz_table, use_container_width=True, hide_index=True)
+
+    st.markdown("## 4. How to adjust and manipulate the tools")
+
+    with st.expander("Global controls", expanded=True):
+        st.markdown(
+            """
+            - **Available parsed dataset**: selects which ELA run/task is loaded from the `data/` folder.
+            - **Event column**: chooses the event alignment, for example `trial_type`, `trial_type_hrf2`, `trial_type_hrf4`, or `trial_type_hrf6`.
+            - **Epoch mode**: selects `full`, `early`, or `late` rows when epoch labels are available.
+            - **Group / Task / Session filters**: restrict the dashboard to HC, PTSD, a specific task, or session if those columns exist.
+            """
+        )
+
+    with st.expander("Timeline controls", expanded=False):
+        st.markdown(
+            """
+            - Select a **subject** to inspect a single subject's event-aligned trajectory.
+            - Use **event column** to compare onset-aligned versus HRF-shifted interpretations.
+            - Read basin rows categorically: B1–B4 are labels, not numeric heights.
+            """
+        )
+
+    with st.expander("Node map controls", expanded=False):
+        st.markdown(
+            """
+            - **Cohort/comparison**: view merged, HC, PTSD, or PTSD-minus-HC.
+            - **Fill mode**:
+              - `cs_delta`: CS+ proportion minus CS− proportion.
+              - `enriched_event`: event overrepresented relative to global event frequency.
+              - `iti_prop`: proportion of ITI occupancy.
+            - **Transition filters**:
+              - minimum transition count,
+              - minimum transition probability,
+              - minimum subject support,
+              - top-k outgoing transitions per state.
+            - Use the companion tables to inspect exact transition probabilities and state summaries.
+            """
+        )
+
+    with st.expander("Sankey controls", expanded=False):
+        st.markdown(
+            """
+            - **Cohort**: merged, HC, or PTSD.
+            - **Event filter**: CS+, CS−, or both.
+            - **Flow level**: basin-level is cleaner; state-level is more detailed but often crowded.
+            - **Pre/Post offset**: number of TRs before and after the CS-aligned anchor.
+            - **Node/link color**: use basin coloring for basin interpretation; event coloring for CS+/CS− emphasis.
+            - Read the percentage and CS+−CS− charts as the quantitative companion to the Sankey.
+            """
+        )
+
+    with st.expander("Radial explorer controls", expanded=False):
+        st.markdown(
+            """
+            - Requires a **subject** because task-event order is randomized per subject.
+            - **Tail length** controls how much recent trajectory history is shown.
+            - **Frame step** and **frame duration** control animation smoothness and speed.
+            - The current radial layout uses descent-graph distance from local minima, not actual energy height.
+            """
+        )
+
+    with st.expander("Interpretation caveats", expanded=True):
+        st.markdown(
+            """
+            - The dashboard uses a shared/merged landscape as a **reference space** for visualization and comparison.
+              Separate group/task landscapes should be used later as a robustness benchmark.
+            - Individual state-level patterns are useful for exploration, but stronger inferential claims should focus on
+              **basins, local minima, and aggregated ELA features**.
+            - Transition backbones are **filtered observed transitions**, not automatically statistically significant edges.
+            - Basin labels such as **threat-like** and **safety-like** are provisional and should be checked against ROI patterns
+              and domain-expert feedback.
+            """
+        )
+
+    st.markdown("## Suggested starting workflow")
+    workflow_table = pd.DataFrame(
+        [
+            {"Step": 1, "Action": "Choose the parsed dataset/task.", "Reason": "Defines which ELA landscape and timeline are loaded."},
+            {"Step": 2, "Action": "Open the Timeline tab.", "Reason": "Check event alignment, early/late labels, and ROI activation patterns."},
+            {"Step": 3, "Action": "Open the Node Map tab.", "Reason": "Find CS+ or CS− shifted states and transition backbones."},
+            {"Step": 4, "Action": "Open the Sankey tab.", "Reason": "Summarize Pre-CS → During-CS → Post-CS basin routes."},
+            {"Step": 5, "Action": "Open Summary Tables.", "Reason": "Verify the exact counts, proportions, transition probabilities, and group-delta values."},
+            {"Step": 6, "Action": "Use the Radial Explorer for examples.", "Reason": "Select a representative subject to explain movement through the landscape."},
+        ]
+    )
+    st.dataframe(workflow_table, use_container_width=True, hide_index=True)
+
+
 # ---------------------------------------------------------------------
 # ELAT Figures tab
 # ---------------------------------------------------------------------
 
-with tabs[1]:
+with tabs[2]:
     st.subheader("Original ELAT figures")
     st.caption(
         "Displays Figure_100–Figure_103 exports when available. "
@@ -830,7 +1047,7 @@ with tabs[1]:
 # Timeline tab
 # ---------------------------------------------------------------------
 
-with tabs[2]:
+with tabs[3]:
     st.subheader("Timeline visualization")
     if timeline_mod is None:
         st.error(f"Timeline module unavailable: {TIMELINE_IMPORT_ERROR}")
@@ -882,7 +1099,7 @@ with tabs[2]:
 # Node map tab
 # ---------------------------------------------------------------------
 
-with tabs[3]:
+with tabs[4]:
     st.subheader("Event-enriched node map")
 
     if node_mod is None:
@@ -1127,7 +1344,7 @@ with tabs[3]:
 # Pre-CS Sankey tab
 # ---------------------------------------------------------------------
 
-with tabs[4]:
+with tabs[5]:
     st.subheader("Pre-CS → During-CS → Post-CS Sankey")
     st.caption(
         "Directional event-window flow view. This avoids generic recurrent basin-to-basin Sankeys and focuses on "
@@ -1311,7 +1528,7 @@ with tabs[4]:
 # Radial explorer tab
 # ---------------------------------------------------------------------
 
-with tabs[5]:
+with tabs[6]:
     st.subheader("Radial basin explorer")
     st.caption("Per-subject animation. Subject selection is required because event order is randomized per subject.")
 
@@ -1367,7 +1584,7 @@ with tabs[5]:
 # Summary tables tab
 # ---------------------------------------------------------------------
 
-with tabs[6]:
+with tabs[7]:
     st.subheader("Summary tables")
     st.caption("Numerical tables supporting the visual modules: state event summaries, local minima, transition backbone, group deltas, and detected statistics files.")
 
