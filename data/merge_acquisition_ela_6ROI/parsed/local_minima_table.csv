@@ -1,0 +1,7 @@
+local_minimum_number,local_minimum_state,local_minimum_label,local_minimum_energy,local_minimum_binary_01,local_minimum_sigma_pattern,basin,basin_label
+1,1,LM1,-1.9650999999999996,000000,------,1,B1
+2,21,LM2,-1.2421,001010,--+-+-,2,B2
+3,24,LM3,-1.0847,111010,+++-+-,3,B3
+4,41,LM4,-1.0898999999999999,000101,---+-+,4,B4
+5,44,LM5,-1.2381,110101,++-+-+,5,B5
+6,64,LM6,-1.9518999999999997,111111,++++++,6,B6
